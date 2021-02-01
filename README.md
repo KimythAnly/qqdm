@@ -15,7 +15,7 @@ import time
 import random
 from qqdm import qqdm, format_str
 
-tw = qqdm(range(10))
+tw = qqdm(range(10), desc=format_str('bold', 'Description'))
 
 for i in tw:
   loss = random.random()
