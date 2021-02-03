@@ -63,9 +63,9 @@ def len_ANSI(msg):
     return len(strip_ANSI_escape_sequences(msg))
 
 class qqdm():
-    def __init__(self, 
-        iterable, 
-        dynamic_ncols=True, 
+    def __init__(self,
+        iterable,
+        dynamic_ncols=True,
         desc='',
         total=None,
         **kwargs
@@ -94,6 +94,7 @@ class qqdm():
         self.temp_ncols = 0
         self.msg = ''
         self._msg = ''
+        self.updated_time = 0
         self.set_bar(0)
         self.set_info('Iters', f'{self.counter}/{format_str("yellow",len(self))}')
         self.set_info('Elapsed Time', '-')
@@ -149,7 +150,9 @@ class qqdm():
         bar = fill(bar, ' ', bar_ncols)
         # self.bar = f'{persent*100: >5.1f}% |{bar}|'
         self.bar = f'{msg} |{bar}|'
-    def __next__(self):
+
+    def _set_info(self):
+
         elapsed = time.time() - self.start_time
         persent = self.counter / len(self)
         remaining = elapsed * (1 / persent - 1) if self.counter != 0 else 0
@@ -166,12 +169,17 @@ class qqdm():
             self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", "?")}')
         self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
 
+    def __next__(self):
+
         try:
             ret = next(self.iter)
-            self.update()
+            if time.time() - self.updated_time > 0.2:
+                self._set_info()
+                self.update()
             self.counter += 1
             return ret
         except:
+            self._set_info()
             self.update()
             self.fp.write('\n')
             self.fp.flush()
@@ -275,6 +283,7 @@ class qqdm():
         self.fp.flush()
         self.msg = ''
         self.temp_ncols = ncols
+        self.updated_time = time.time()
 
 __all__ = [
     'qqdm',
