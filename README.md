@@ -1,5 +1,7 @@
 # qqdm
 
+A lightweight, fast and pretty progress bar for Python
+
 ## Demo
 <img src="https://github.com/KimythAnly/qqdm/blob/main/demo.gif" width="768"/>
 
