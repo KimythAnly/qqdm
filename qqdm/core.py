@@ -1,66 +1,9 @@
 import sys
 import shutil
-import re
 import time
 from addict import Dict
 
-symbols = Dict({
-        'prev_line': '\033[F',
-        'clear_line': '\033[K',
-        'red': '\033[91m',
-        'green': '\033[92m',
-        'blue': '\033[94m',
-        'cyan': '\033[96m',
-        'white': '\033[97m',
-        'yellow': '\033[93m',
-        'magenta': '\033[95m',
-        'grey' : '\033[90m',
-        'black' : '\033[90m',
-        'default' : '\033[99m',
-        'bold': '\033[1m',
-        'underline': '\033[4m',
-        'end': '\033[0m'
-    })
-
-def fill(msg, token=' ', maxcols=None, align='<'):
-    if maxcols is None:
-        maxcols = shutil.get_terminal_size()[0]
-    exp = maxcols - len_ANSI(msg)
-    if align == '<':
-        return f'{msg}{token*exp}'
-    elif align == '^':
-        return f'{token * (exp//2)}{msg}{token * (exp - exp//2)}'
-    elif align == '>':
-        return f'{token*exp}{msg}'
-    else:
-        return f'{msg}{token*exp}'
-
-def format_time(t):
-    return time.strftime("%H:%M:%S", time.gmtime(t))
-
-def format_str(fmt, s, end=None):
-    if end is None:
-        end = symbols.end
-    if isinstance(fmt, list):
-        return ''.join([symbols[f] for f in fmt]) + str(s) + end
-    return symbols[fmt] + str(s) + end
-
-# =========================================================
-#  Source: https://stackoverflow.com/questions/2186919
-#  Author: John Machin
-# =========================================================
-strip_ANSI_escape_sequences_sub = re.compile(r"""
-    \x1b     # literal ESC
-    \[       # literal [
-    [;\d]*   # zero or more digits or semicolons
-    [A-Za-z] # a letter
-    """, re.VERBOSE).sub
-def strip_ANSI_escape_sequences(s):
-    return strip_ANSI_escape_sequences_sub("", s)
-# =========================================================
-
-def len_ANSI(msg):
-    return len(strip_ANSI_escape_sequences(msg))
+from .util import symbols, format_str, format_time, len_ANSI, fill
 
 class qqdm():
     def __init__(self,
@@ -75,7 +18,13 @@ class qqdm():
         self.iter = iter(self.iterable)
         self.dynamic_ncols = dynamic_ncols
         self.desc = desc
-        self.total = total or len(self.iterable)
+        if total:
+            self.total = total
+        else:
+            try:
+                self.total = len(self.iterable)
+            except:
+                self.total = None
         # Reset
         self.reset()
 
@@ -90,13 +39,17 @@ class qqdm():
         self.info_dict = {}
         self.ordered_key = []
         self.counter = 0
-        self.ncols = 20
+        self.ncols = 60
         self.temp_ncols = 0
         self.msg = ''
         self._msg = ''
         self.updated_time = 0
-        self.set_bar(0)
-        self.set_info('Iters', f'{self.counter}/{format_str("yellow",len(self))}')
+        if self.total:
+            self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
+            self.set_bar(0)
+        else:
+            self.set_info('Iters', self.counter)
+            self.set_bar(-1)
         self.set_info('Elapsed Time', '-')
         self.set_info('Speed', '-')
         self.update()
@@ -113,10 +66,15 @@ class qqdm():
         return self.total
 
     def __iter__(self):
-        # for i in self.tqdm:
-            # yield i
         self.start_time = time.time()
-        return self
+        for i in self.iter:
+            yield i
+            self.counter += 1
+            if time.time() - self.updated_time > 0.2:
+                self._set_info()
+                self.update()
+        self._set_info()
+        self.update()
 
     def get_ncols(self):
         if self.dynamic_ncols:
@@ -139,6 +97,12 @@ class qqdm():
 
     # ■█▶
     def set_bar(self, persent, color='white', element='█'):
+        if persent == -1:
+            if self.desc:
+                self.bar = self.desc
+            else:
+                self.bar = ''
+            return
         if self.desc:
             msg = f'{self.desc} {persent*100: >5.1f}%'
         else:
@@ -152,38 +116,39 @@ class qqdm():
         self.bar = f'{msg} |{bar}|'
 
     def _set_info(self):
-
         elapsed = time.time() - self.start_time
-        persent = self.counter / len(self)
+        _elapsed = format_time(elapsed)
+        self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
+
+        if not self.total:
+            self.set_info('Iters', self.counter)
+            return 
+
+        persent = self.counter / self.total
         remaining = elapsed * (1 / persent - 1) if self.counter != 0 else 0
 
         self.set_bar(persent)
 
-        _elapsed = format_time(elapsed)
         _remaining = format_time(remaining)
 
-        self.set_info('Iters', f'{self.counter}/{format_str("yellow",len(self))}')
+        self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
         if self.counter != 0:
             self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", _remaining)}')
         else:
             self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", "?")}')
-        self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
+        # self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
 
-    def __next__(self):
+    def write_flush(self, message):
+        self.fp.write(message)
+        self.fp.flush()
 
-        try:
-            ret = next(self.iter)
-            if time.time() - self.updated_time > 0.2:
-                self._set_info()
-                self.update()
-            self.counter += 1
-            return ret
-        except:
-            self._set_info()
-            self.update()
-            self.fp.write('\n')
-            self.fp.flush()
-            raise StopIteration
+    def join_lines(self, lines):
+        ret = []
+        for line in lines:
+            if isinstance(line, str):
+                ret.append(line)
+        ret = '\n'.join(ret)
+        return ret
 
     def _add_str(self, msg):
         return msg
@@ -265,7 +230,7 @@ class qqdm():
             self.msg,
             self.bar,
         ]
-        lines = '\n'.join(lines)
+        lines = self.join_lines(lines)
         if self._msg:
             n_line = self._msg.count('\n')
         else:
@@ -279,8 +244,7 @@ class qqdm():
         self._msg = n_line * (symbols.clear_line+symbols.prev_line) + _msg
         # if self._msg:
             # self._msg = f'{self._msg}\n{self.bar}'
-        self.fp.write(self._msg)
-        self.fp.flush()
+        self.write_flush(self._msg)
         self.msg = ''
         self.temp_ncols = ncols
         self.updated_time = time.time()
