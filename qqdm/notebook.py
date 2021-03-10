@@ -17,11 +17,21 @@ class SuperString(str):
     def __repr__(self):
         return str(self.s)
 
-class DummyBar():
-    def update(self, *args, **kwrags):
-        pass        
+class DummyBar(HBox):
+    def __init__(self, persent=0.0, description=None):
+        self.description = description
+        # Init
+        self.prefix = HTML()
+        self.update()
+        super().__init__(children=[self.prefix])
+        
+    def update(self, description=None, **kwrags):
+        if description:
+            self.description = description
+        if self.description:
+            self.prefix.value = self.description
 
-    def close(self, *args, **kwrags):
+    def set_bar_style(self, *args, **kwargs):
         pass
 
 class IpythonBar(HBox):
@@ -99,12 +109,10 @@ class qqdm(_qqdm):
         if self.total:
             self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
             self.bar = IpythonBar(persent=0.0, description=self.desc) # FloatProgress(description=f'{0: >5.1f}%')
-            display(self.bar)
         else:
             self.set_info('Iters', self.counter)
-            self.bar = DummyBar()
-
-        self.set_info('Iters', f'{self.counter}/{format_str("yellow",len(self))}')
+            self.bar = DummyBar(description=self.desc)
+        display(self.bar)
         self.set_info('Elapsed Time', '-')
         self.set_info('Speed', '-')
         self.update()
@@ -127,24 +135,6 @@ class qqdm(_qqdm):
 
     def set_bar(self, persent, color='white', element='█'):
         self.bar.update(persent)
-
-    def _set_info(self):
-
-        elapsed = time.time() - self.start_time
-        persent = self.counter / len(self)
-        remaining = elapsed * (1 / persent - 1) if self.counter != 0 else 0
-
-        self.set_bar(persent)
-
-        _elapsed = format_time(elapsed)
-        _remaining = format_time(remaining)
-
-        self.set_info('Iters', f'{self.counter}/{format_str("yellow",len(self))}')
-        if self.counter != 0:
-            self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", _remaining)}')
-        else:
-            self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", "?")}')
-        self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
 
     def write_flush(self, message):
         self.fp.update(SuperString(self._msg))

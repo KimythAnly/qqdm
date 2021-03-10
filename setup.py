@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="qqdm",
-    version="0.0.5",
+    version="0.0.6",
     author="KimythAnly",
     author_email="kimythanly@gmail.com",
     description="A very lightweight progress bar.",
@@ -14,7 +14,8 @@ setuptools.setup(
     url="https://github.com/kimythanly/qqdm",
     packages=setuptools.find_packages(),
     install_requires=[
-        'addict'
+        'addict',
+        'jupyter',
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

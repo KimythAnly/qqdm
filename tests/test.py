@@ -1,7 +1,7 @@
 import time
 import random
-from qqdm import qqdm, format_str
 
+from qqdm import qqdm, format_str
 
 start = time.time()
 
