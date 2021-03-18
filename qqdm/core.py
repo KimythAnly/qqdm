@@ -8,17 +8,24 @@ from .util import symbols, format_str, format_time, len_ANSI, fill
 
 class qqdm():
     def __init__(self,
-        iterable,
+        iterable=None,
         dynamic_ncols=True,
         desc='',
         total=None,
+        file=None,
+        disable=False,
         **kwargs
     ):
-        self.fp = sys.stderr
         self.iterable = iterable
-        self.iter = iter(self.iterable)
         self.dynamic_ncols = dynamic_ncols
         self.desc = desc
+        self.disable = disable
+        self.fp = file or sys.stderr
+        # Reset
+        self._msg = ''
+        self.reset(total=total)
+
+    def reset(self, total=None):
         if total:
             self.total = total
         else:
@@ -26,10 +33,7 @@ class qqdm():
                 self.total = len(self.iterable)
             except:
                 self.total = None
-        # Reset
-        self.reset()
-
-    def reset(self):
+        self.start_time = time.time()
         self.default_kv_format = format_str(['blue'], '{key}: ') + '{value}'
         self.ctrls = Dict({
             'key': ['bold'],
@@ -39,22 +43,25 @@ class qqdm():
         })
         self.info_dict = {}
         self.ordered_key = []
-        self.counter = 0
+        self.n = 0
         self.ncols = 60
         self.temp_ncols = 0
         self.msg = ''
-        self._msg = ''
         self.updated_time = 0
         if self.total:
-            self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
+            self.set_info('Iters', f'{self.n}/{format_str("yellow",self.total)}')
             self.set_bar(0)
         else:
-            self.set_info('Iters', self.counter)
+            self.set_info('Iters', self.n)
             self.set_bar(-1)
-        self.set_info('Elapsed Time', '-')
-        self.set_info('Speed', '-')
-        self.update()
+        self.set_info('Elapsed Time', f'{"-": ^17}')
+        self.set_info('Speed', f'{"-": ^8}')
+        self.update(0)
+    
 
+
+    def set_description(self, desc):
+        self.desc = desc
 
     def set_ctrls_by_dict(self, dct):
         for k, v in dct.items():
@@ -67,15 +74,27 @@ class qqdm():
         return self.total
 
     def __iter__(self):
+        iterable = self.iterable
+
+        if self.disable:
+            for obj in iterable:
+                yield obj
+            return
+
+        last_print_n = self.last_print_n
+        n = self.n
         self.start_time = time.time()
-        for i in self.iter:
-            yield i
-            self.counter += 1
-            if time.time() - self.updated_time > 0.2:
-                self._set_info()
-                self.update()
-        self._set_info()
-        self.update()
+
+        try:
+            for obj in iterable:
+                yield obj
+                n += 1
+                if time.time() - self.updated_time > 0.2:
+                    self.update(n - last_print_n)
+                    last_print_n = self.last_print_n
+        finally:
+            self.update(n - last_print_n)
+            self.close()
 
     def get_ncols(self):
         if self.dynamic_ncols:
@@ -90,6 +109,9 @@ class qqdm():
         else:
             for key, value in dct.items():
                 self.set_info(key, value)
+
+    def set_postfix(self, dct):
+        return self.set_infos(dct)
 
     def set_info(self, key, val):
         if key not in self.info_dict:
@@ -119,25 +141,25 @@ class qqdm():
     def _set_info(self):
         elapsed = time.time() - self.start_time
         _elapsed = format_time(elapsed)
-        self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
+        self.set_info('Speed', f'{self.n / elapsed:.2f}it/s')
 
         if not self.total:
-            self.set_info('Iters', self.counter)
+            self.set_info('Iters', self.n)
             return 
 
-        persent = self.counter / self.total
-        remaining = elapsed * (1 / persent - 1) if self.counter != 0 else 0
+        persent = self.n / self.total
+        remaining = elapsed * (1 / persent - 1) if self.n != 0 else 0
 
         self.set_bar(persent)
 
         _remaining = format_time(remaining)
 
-        self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
-        if self.counter != 0:
+        self.set_info('Iters', f'{self.n}/{format_str("yellow",self.total)}')
+        if self.n != 0:
             self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", _remaining)}')
         else:
             self.set_info('Elapsed Time', f'{_elapsed}<{format_str("yellow", "?")}')
-        # self.set_info('Speed', f'{self.counter / elapsed:.2f}it/s')
+        # self.set_info('Speed', f'{self.n / elapsed:.2f}it/s')
 
     def write_flush(self, message):
         self.fp.write(message)
@@ -183,7 +205,16 @@ class qqdm():
         else:
             self.msg = ''
 
-    def update(self, *args):
+    def update(self, n=1):
+        if self.disable:
+            return
+
+        self.n += n
+
+        if n > 0:
+            self._set_info()
+
+
         # flush the msg
         ncols = self.get_ncols()
         prefix_upper_border = fill('', '')
@@ -242,6 +273,9 @@ class qqdm():
             if m:
                 _msg_filled.append(fill(m, ' '))
         _msg = '\n'.join(_msg_filled)
+        pad_n_line = n_line - _msg.count('\n')
+        if pad_n_line > 0:
+            _msg = fill('', ' ') * pad_n_line + _msg
         self._msg = n_line * (symbols.clear_line+symbols.prev_line) + _msg
         # if self._msg:
             # self._msg = f'{self._msg}\n{self.bar}'
@@ -249,6 +283,11 @@ class qqdm():
         self.msg = ''
         self.temp_ncols = ncols
         self.updated_time = time.time()
+        self.last_print_n = self.n
+        return True
+
+    def close(self):
+        pass
 
 __all__ = [
     'qqdm',

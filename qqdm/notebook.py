@@ -66,18 +66,24 @@ def format_str(fmt, s, end=None):
 
 class qqdm(_qqdm):
     def __init__(self,
-        iterable,
+        iterable=None,
         dynamic_ncols=True,
         desc='',
         total=None,
+        file=None,
+        disable=False,
         **kwargs
     ):
-        # self.fp = sys.stderr
-        self.fp = display(None, display_id=True)
         self.iterable = iterable
-        self.iter = iter(self.iterable)
         self.dynamic_ncols = dynamic_ncols
         self.desc = desc
+        self.disable = disable
+        self.fp = display(None, display_id=True)
+        # Reset
+        self._msg = ''
+        self.reset(total=total)
+
+    def reset(self, total=None):
         if total:
             self.total = total
         else:
@@ -85,10 +91,7 @@ class qqdm(_qqdm):
                 self.total = len(self.iterable)
             except:
                 self.total = None
-        # Reset
-        self.reset()
-
-    def reset(self):
+        self.start_time = time.time()
         self.default_kv_format = format_str(['blue'], '{key}: ') + '{value}'
         self.ctrls = Dict({
             'key': ['bold'],
@@ -98,40 +101,51 @@ class qqdm(_qqdm):
         })
         self.info_dict = {}
         self.ordered_key = []
-        self.counter = 0
+        self.n = 0
         self.ncols = 60
         self.temp_ncols = 0
         self.msg = ''
-        self._msg = ''
+        if self._msg:
+            self._msg = '\n' * 2
         self.updated_time = 0
         if hasattr(self, '_bar'):
             self._bar.close()
         if self.total:
-            self.set_info('Iters', f'{self.counter}/{format_str("yellow",self.total)}')
+            self.set_info('Iters', f'{self.n}/{format_str("yellow",self.total)}')
             self.bar = IpythonBar(persent=0.0, description=self.desc) # FloatProgress(description=f'{0: >5.1f}%')
         else:
-            self.set_info('Iters', self.counter)
+            self.set_info('Iters', self.n)
             self.bar = DummyBar(description=self.desc)
         display(self.bar)
-        self.set_info('Elapsed Time', '-')
-        self.set_info('Speed', '-')
-        self.update()
+        self.set_info('Elapsed Time', f'{"-": ^17}')
+        self.set_info('Speed', f'{"-": ^8}')
+        self.update(0)
 
     def __iter__(self):
+        iterable = self.iterable       
+
+        if self.disable:
+            for obj in iterable:
+                yield obj
+            return
+
+        last_print_n = self.last_print_n
+        n = self.n
+        self.start_time = time.time()
+
         try:
-            self.start_time = time.time()
-            # return self
-            for i in self.iter:
-                yield i
-                self.counter += 1
+            for obj in iterable:
+                yield obj
+                n += 1
                 if time.time() - self.updated_time > 0.2:
-                    self._set_info()
-                    self.update()
-            self._set_info()
-            self.update()
+                    self.update(n - last_print_n)
+                    last_print_n = self.last_print_n
             self.bar.set_bar_style('success')
         except:
             self.bar.set_bar_style('danger')
+        finally:
+            self.update(n - last_print_n)
+            self.close()
 
     def set_bar(self, persent, color='white', element='█'):
         self.bar.update(persent)
