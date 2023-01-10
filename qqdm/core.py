@@ -145,6 +145,7 @@ class qqdm():
 
         if not self.total:
             self.set_info('Iters', self.n)
+            self.set_info('Elapsed Time', f'{_elapsed}')
             return 
 
         persent = self.n / self.total
