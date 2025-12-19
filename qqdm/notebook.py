@@ -70,6 +70,7 @@ class qqdm(_qqdm):
         dynamic_ncols=True,
         desc='',
         total=None,
+        initial=None,
         file=None,
         disable=False,
         **kwargs
@@ -81,14 +82,18 @@ class qqdm(_qqdm):
         self.fp = display(None, display_id=True)
         # Reset
         self._msg = ''
-        self.reset(total=total)
+        self.reset(total=total, initial=initial)
 
-    def reset(self, total=None):
+    def reset(self, total=None, initial=None):
+        if initial:
+            self.initial = initial
+        else:
+            self.initial = 0
         if total:
             self.total = total
         else:
             try:
-                self.total = len(self.iterable)
+                self.total = len(self.iterable) + self.initial
             except:
                 self.total = None
         self.start_time = time.time()
@@ -101,7 +106,7 @@ class qqdm(_qqdm):
         })
         self.info_dict = {}
         self.ordered_key = []
-        self.n = 0
+        self.n = self.initial
         self.ncols = 60
         self.temp_ncols = 0
         self.msg = ''

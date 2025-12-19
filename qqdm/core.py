@@ -12,6 +12,7 @@ class qqdm():
         dynamic_ncols=True,
         desc='',
         total=None,
+        initial=None,
         file=None,
         disable=False,
         **kwargs
@@ -23,14 +24,15 @@ class qqdm():
         self.fp = file or sys.stderr
         # Reset
         self._msg = ''
-        self.reset(total=total)
+        self.reset(total=total, initial=initial)
 
-    def reset(self, total=None):
+    def reset(self, total=None, initial=None):
+        self.initial = 0 if initial is None else initial
         if total:
             self.total = total
         else:
             try:
-                self.total = len(self.iterable)
+                self.total = len(self.iterable) + self.initial
             except:
                 self.total = None
         self.start_time = time.time()
@@ -43,7 +45,7 @@ class qqdm():
         })
         self.info_dict = {}
         self.ordered_key = []
-        self.n = 0
+        self.n = self.initial
         self.ncols = 60
         self.temp_ncols = 0
         self.msg = ''
@@ -71,7 +73,7 @@ class qqdm():
         self.ctrls[k] = v
 
     def __len__(self):
-        return self.total
+        return self.total - self.initial
 
     def __iter__(self):
         iterable = self.iterable
@@ -141,7 +143,7 @@ class qqdm():
     def _set_info(self):
         elapsed = time.time() - self.start_time
         _elapsed = format_time(elapsed)
-        self.set_info('Speed', f'{self.n / elapsed:.2f}it/s')
+        self.set_info('Speed', f'{(self.n - self.initial) / elapsed:.2f}it/s')
 
         if not self.total:
             self.set_info('Iters', self.n)
@@ -149,7 +151,10 @@ class qqdm():
             return 
 
         persent = self.n / self.total
-        remaining = elapsed * (1 / persent - 1) if self.n != 0 else 0
+        initial_adjusted_persent = (self.n - self.initial) / (self.total - self.initial)
+        remaining = elapsed * (
+            1 / initial_adjusted_persent - 1
+        ) if self.n - self.initial != 0 else 0
 
         self.set_bar(persent)
 
